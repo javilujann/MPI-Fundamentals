@@ -48,6 +48,13 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
       - name: Install dependencies
-        run: python -m pip install --group dev
+        # Pyright has to see the lab's third-party packages to resolve their
+        # imports (matplotlib, mpi4py): without them every symbol coming from
+        # them is Unknown, which `strict` reports as an error. pyproject.toml
+        # points Pyright at ./.venv, so the environment is created there
+        # instead of in the interpreter set up by setup-python.
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install --group lab --group dev
       - name: Pyright
-        run: pyright
+        run: .venv/bin/pyright
