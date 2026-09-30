@@ -1,0 +1,36 @@
+# Byte-compiled files and caches
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+
+# Tool caches
+.ruff_cache/
+.pytest_cache/
+
+# Coverage
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Packaging artefacts
+build/
+dist/
+*.egg-info/
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+
+# Local secrets and overrides
+.env
+
+# Data sets generated with proteins-generator.py
+proteins*.csv
+
+# Benchmark output
+results/

@@ -1,0 +1,173 @@
+# This project is not a distributable package, so it needs neither a [project]
+# nor a [build-system] table: pyproject.toml is used purely for tool
+# configuration and for the development dependency group below.
+# Install everything with:  python -m pip install --group dev
+
+# The lab itself needs numpy (used by the data set generator), matplotlib (the
+# bar chart and the report charts) and mpi4py (the parallel version). They are
+# listed here so that `python -m pip install --group lab --group dev` sets up a
+# working environment from scratch.
+[dependency-groups]
+lab = [
+    "matplotlib>=3.10",
+    "mpi4py>=4.0",
+    "numpy>=2.0",
+]
+dev = [
+    "pre-commit>=4.6",
+    "pyright>=1.1.414",
+    "ruff>=0.16.7",
+]
+
+# --------------------------------------------------------------------------- #
+# Ruff — linter + formatter (replaces flake8, isort, pyupgrade, black, ...)    #
+# This block is intentionally identical in every template, so moving from one  #
+# template to another never means re-learning the lint rules.                  #
+# --------------------------------------------------------------------------- #
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+src = ["."]
+# Provided by the teaching staff and delivered untouched: linting it would only
+# produce noise that must not be fixed.
+extend-exclude = ["proteins-generator.py"]
+
+[tool.ruff.lint]
+# An explicit, curated selection. Prefer this over `select = ["ALL"]`: new Ruff
+# releases cannot silently break your CI, and every rule here is a deliberate
+# choice. Run `ruff rule <CODE>` to see what any of them does.
+select = [
+    "F",     # pyflakes: real errors (undefined names, unused imports, ...)
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "I",     # isort: import sorting
+    "N",     # pep8-naming
+    "D",     # pydocstyle: docstring style (content only, see `ignore = D1`)
+    "UP",    # pyupgrade: keep syntax modern for the target Python
+    "ANN",   # flake8-annotations: every signature is annotated
+    "ASYNC", # flake8-async: blocking calls inside async functions
+    "S",     # flake8-bandit: common security footguns
+    "BLE",   # flake8-blind-except: no bare `except Exception`
+    "FBT",   # flake8-boolean-trap: no positional boolean arguments
+    "B",     # flake8-bugbear: likely bugs and design problems
+    "A",     # flake8-builtins: no shadowing of builtins
+    "C4",    # flake8-comprehensions
+    "DTZ",   # flake8-datetimez: no naive datetimes
+    "T10",   # flake8-debugger: no leftover breakpoints
+    "EM",    # flake8-errmsg: exception messages in a variable (clean tracebacks)
+    "EXE",   # flake8-executable: shebang/permission mismatches
+    "FA",    # flake8-future-annotations
+    "ISC",   # flake8-implicit-str-concat
+    "ICN",   # flake8-import-conventions: `import numpy as np`, ...
+    "LOG",   # flake8-logging
+    "G",     # flake8-logging-format: no f-strings in log calls
+    "INP",   # flake8-no-pep420: no accidental implicit namespace packages
+    "PIE",   # flake8-pie: misc. simplifications
+    "T20",   # flake8-print: no stray print()/pprint()
+    "PYI",   # flake8-pyi: stub-file correctness
+    "PT",    # flake8-pytest-style
+    "RSE",   # flake8-raise
+    "RET",   # flake8-return
+    "SLF",   # flake8-self: no private-member access across objects
+    "SIM",   # flake8-simplify
+    "SLOT",  # flake8-slots
+    "TID",   # flake8-tidy-imports
+    "TC",    # flake8-type-checking: keep typing-only imports out of runtime
+    "ARG",   # flake8-unused-arguments
+    "PTH",   # flake8-use-pathlib: pathlib over os.path
+    "ERA",   # eradicate: no commented-out code
+    "PGH",   # pygrep-hooks: no blanket `# noqa` / `# type: ignore`
+    "PL",    # pylint (C/E/R/W subset ported to Ruff)
+    "TRY",   # tryceratops: exception-handling antipatterns
+    "FLY",   # flynt: f-strings over str.join
+    "PERF",  # perflint
+    "FURB",  # refurb: modern idioms
+    "RUF",   # Ruff-specific rules
+]
+ignore = [
+    # Docstrings are encouraged, not mandatory. Drop this line to require a
+    # docstring on every module, class and function.
+    "D1",
+    # Line length is the formatter's job; the linter flagging it too is noise.
+    "E501",
+    # Rules that conflict with `ruff format` (see the Ruff formatter docs).
+    "W191",   # tab indentation
+    "E111",   # indentation not a multiple of four
+    "E114",   # comment indentation not a multiple of four
+    "E117",   # over-indented
+    "D206",   # docstring indented with tabs
+    "D300",   # triple single quotes
+    "ISC001", # single-line implicit string concatenation
+]
+
+[tool.ruff.lint.per-file-ignores]
+# CLI entry points are allowed to write to stdout.
+"**/__main__.py" = ["T201"]
+# The three scripts of the lab are stand-alone command-line programs sitting at
+# the root of a flat project: printing to the screen is their whole purpose, and
+# they are deliberately not part of a package.
+"*.py" = ["INP001", "T201"]
+# benchmark.py runs the two matchers as subprocesses, with a fixed command line
+# built by the script itself and `mpiexec` looked up on PATH.
+"benchmark.py" = ["INP001", "T201", "S603", "S607"]
+# Test-suite carve-outs. Kept here in every template so that adding a `tests/`
+# directory later never requires touching the lint configuration.
+"tests/**/*.py" = [
+    "INP001",  # tests are deliberately not a package
+    "S101",    # assert is how pytest works
+    "PLR2004", # magic values are fine in assertions
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.format]
+# Format code examples inside docstrings too.
+docstring-code-format = true
+
+# --------------------------------------------------------------------------- #
+# Pyright — static type checking, as strict as is practical                   #
+# `strict` is Pyright's strongest preset; everything below it turns on checks  #
+# that even `strict` leaves off. The intent: no implicit Any, no unchecked     #
+# escape hatches, every symbol has a known type.                               #
+# --------------------------------------------------------------------------- #
+[tool.pyright]
+# The generator is excluded: it is delivered exactly as it was given to us.
+include = ["benchmark.py", "mpi-proteins.py", "serial-proteins.py"]
+pythonVersion = "3.14"
+pythonPlatform = "All"
+typeCheckingMode = "strict"
+
+# Set so that `pyright` finds matplotlib and mpi4py without the virtualenv
+# having to be activated first.
+venvPath = "."
+venv = ".venv"
+
+# --- Relaxed for one third-party library ----------------------------------- #
+# Every matplotlib plotting call is declared as `**kwargs: Unknown` in the
+# inline types that matplotlib ships, so under `strict` each one of them is an
+# error that no annotation on our side can remove. This is the only check turned
+# off, and it is off because of matplotlib, not because of the code here.
+reportUnknownMemberType = "none"
+
+# --- Stricter than `strict` ------------------------------------------------ #
+deprecateTypingAliases = true             # typing.List -> list, etc.
+reportImplicitOverride = "error"          # subclass overrides need @override
+reportImportCycles = "error"
+reportPropertyTypeMismatch = "error"
+reportUninitializedInstanceVariable = "error"
+reportUnnecessaryTypeIgnoreComment = "error"
+reportUnreachable = "error"
+
+# --- No silent escape hatches ---------------------------------------------- #
+# `# type: ignore` is disabled entirely: suppressions must name the rule they
+# suppress, i.e. `# pyright: ignore[reportUnknownMemberType]`. Combined with
+# reportUnnecessaryTypeIgnoreComment above, stale suppressions become errors.
+enableTypeIgnoreComments = false
+
+# Left off on purpose, and the reason each one is not worth it:
+#   reportUnusedCallResult  - every ignored return value becomes an error.
+#   reportMissingSuperCall  - fires on plain classes that derive from object,
+#                             where `super().__init__()` is pure boilerplate.
+#   reportCallInDefaultInitializer - already covered by Ruff's B008.
+# `typeCheckingMode = "all"` turns all three on if you disagree.
