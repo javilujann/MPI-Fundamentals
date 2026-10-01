@@ -11,16 +11,15 @@ type Match = tuple[int, int, int]
 # more occurrences first, ties broken by the highest hydrofob.
 
 
-
-def scan(path: Path, pattern: bytes, start: int, end: int) -> tuple[int, int, list[tuple]]:
+def scan(path: Path, pattern: bytes, start: int, end: int) -> tuple[int, int, list[Match]]:
     proteins = 0
     occurrences = 0
-    best = []
+    best: list[Match] = []
 
     with path.open("rb") as data:
         data.seek(start)
-        
-        # Skip the CSV header (if at byte 0) or the partial line 
+
+        # Skip the CSV header (if at byte 0) or the partial line
         # that belongs to the previous worker's chunk
         data.readline()
 
@@ -31,7 +30,7 @@ def scan(path: Path, pattern: bytes, start: int, end: int) -> tuple[int, int, li
                 break  # End of file reached
 
             protid, _enzyme, hydrofob, sequence = line.split(b",")
-           
+
             count = sequence.count(pattern)
             if count > 0:
                 proteins += 1
@@ -40,7 +39,7 @@ def scan(path: Path, pattern: bytes, start: int, end: int) -> tuple[int, int, li
 
                 best.append(match)
                 best.sort(reverse=True)  # Sorts descending so the highest counts are first
-                best = best[:10]         # Keep only the first 10 elements
+                best = best[:10]  # Keep only the first 10 elements
 
     return proteins, occurrences, best
 
@@ -75,11 +74,14 @@ def plot(pattern: str, best: list[Match]) -> None:
         pattern: Pattern that was searched, in uppercase.
         best: Best matches, already sorted from best to worst.
     """
-    import matplotlib.pyplot as plt  
+    # Imported here and not at the top of the file: the chart is the last
+    # optional step, so a run that never gets to it does not pay for
+    # matplotlib's import time.
+    import matplotlib.pyplot as plt  # noqa: PLC0415
 
     if not best:
         return
-    figure, axes = plt.subplots(figsize=(9, 5), layout="constrained")
+    _figure, axes = plt.subplots(figsize=(9, 5), layout="constrained")
     bars = axes.bar(
         [str(protid) for *_, protid in best],
         [count for count, *_ in best],
@@ -98,9 +100,9 @@ def plot(pattern: str, best: list[Match]) -> None:
     axes.spines["bottom"].set_color(GRID)
     plt.show()
 
+
 def main() -> None:
     """Run the serial matcher."""
-    
     # 1 and 2: read the pattern from the keyboard and change it to uppercase.
     pattern = input("Pattern to search: ").strip().upper()
     if not pattern:

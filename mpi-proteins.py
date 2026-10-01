@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
 
-import argparse
-import heapq
-from itertools import chain
 from pathlib import Path
 
 from mpi4py import MPI
@@ -15,15 +12,15 @@ type Match = tuple[int, int, int]
 # more occurrences first, ties broken by the highest hydrofob.
 
 
-def scan(path: Path, pattern: bytes, start: int, end: int) -> tuple[int, int, list[tuple]]:
+def scan(path: Path, pattern: bytes, start: int, end: int) -> tuple[int, int, list[Match]]:
     proteins = 0
     occurrences = 0
-    best = []
+    best: list[Match] = []
 
     with path.open("rb") as data:
         data.seek(start)
-        
-        # Skip the CSV header (if at byte 0) or the partial line 
+
+        # Skip the CSV header (if at byte 0) or the partial line
         # that belongs to the previous worker's chunk
         data.readline()
 
@@ -34,7 +31,7 @@ def scan(path: Path, pattern: bytes, start: int, end: int) -> tuple[int, int, li
                 break  # End of file reached
 
             protid, _enzyme, hydrofob, sequence = line.split(b",")
-           
+
             count = sequence.count(pattern)
             if count > 0:
                 proteins += 1
@@ -43,7 +40,7 @@ def scan(path: Path, pattern: bytes, start: int, end: int) -> tuple[int, int, li
 
                 best.append(match)
                 best.sort(reverse=True)  # Sorts descending so the highest counts are first
-                best = best[:10]         # Keep only the first 10 elements
+                best = best[:10]  # Keep only the first 10 elements
 
     return proteins, occurrences, best
 
@@ -78,11 +75,14 @@ def plot(pattern: str, best: list[Match]) -> None:
         pattern: Pattern that was searched, in uppercase.
         best: Best matches, already sorted from best to worst.
     """
-    import matplotlib.pyplot as plt
+    # Imported here and not at the top of the file: drawing is optional and
+    # only the root process ever does it, so the other ones must not pay for
+    # matplotlib's import time.
+    import matplotlib.pyplot as plt  # noqa: PLC0415
 
     if not best:
         return
-    figure, axes = plt.subplots(figsize=(9, 5), layout="constrained")
+    _figure, axes = plt.subplots(figsize=(9, 5), layout="constrained")
     bars = axes.bar(
         [str(protid) for *_, protid in best],
         [count for count, *_ in best],
@@ -107,14 +107,14 @@ def main() -> None:
     comm = MPI.COMM_WORLD  # global communicator
     rank = comm.Get_rank()  # id of this process
     nprocs = comm.Get_size()  # total number of processes
-    path = Path("proteins.csv") # Path to the file
+    path = Path("proteins.csv")  # Path to the file
 
     # 1 and 2: only the first process reads the pattern from the keyboard and
     # changes it to uppercase, and then broadcasts it to all the others.
     pattern: str | None = None
     if rank == 0:
         pattern = input("Pattern to search: ").strip().upper()
-        
+
     pattern = comm.bcast(pattern, root=0)
     if pattern is None:
         message = "the pattern cannot be empty"
@@ -143,13 +143,13 @@ def main() -> None:
     # 11 and 12: the root process stops the clock and prints the results.
     if rank != 0 or candidates is None:
         return
-    
-    flatten_best = []
+
+    flatten_best: list[Match] = []
     for best_list in candidates:
         flatten_best.extend(best_list)
     flatten_best.sort(reverse=True)
     best = flatten_best[:10]
-    
+
     elapsed = MPI.Wtime() - start
     print(f"Execution time with {nprocs} processes: {elapsed:.3f} s")
 
