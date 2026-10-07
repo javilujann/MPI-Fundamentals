@@ -31,6 +31,3 @@ dist/
 
 # Data sets generated with proteins-generator.py
 proteins*.csv
-
-# Benchmark output
-results/

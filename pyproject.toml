@@ -4,7 +4,7 @@
 # Install everything with:  python -m pip install --group dev
 
 # The lab itself needs numpy (used by the data set generator), matplotlib (the
-# bar chart and the report charts) and mpi4py (the parallel version). They are
+# bar chart) and mpi4py (the parallel version). They are
 # listed here so that `python -m pip install --group lab --group dev` sets up a
 # working environment from scratch.
 [dependency-groups]
@@ -103,13 +103,10 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 # CLI entry points are allowed to write to stdout.
 "**/__main__.py" = ["T201"]
-# The three scripts of the lab are stand-alone command-line programs sitting at
-# the root of a flat project: printing to the screen is their whole purpose, and
+# The scripts of the lab are stand-alone command-line programs sitting at the
+# root of a flat project: printing to the screen is their whole purpose, and
 # they are deliberately not part of a package.
 "*.py" = ["INP001", "T201"]
-# benchmark.py runs the two matchers as subprocesses, with a fixed command line
-# built by the script itself and `mpiexec` looked up on PATH.
-"benchmark.py" = ["INP001", "T201", "S603", "S607"]
 # Test-suite carve-outs. Kept here in every template so that adding a `tests/`
 # directory later never requires touching the lint configuration.
 "tests/**/*.py" = [
@@ -133,7 +130,7 @@ docstring-code-format = true
 # --------------------------------------------------------------------------- #
 [tool.pyright]
 # The generator is excluded: it is delivered exactly as it was given to us.
-include = ["benchmark.py", "mpi-proteins.py", "serial-proteins.py"]
+include = ["mpi-proteins.py", "serial-proteins.py"]
 pythonVersion = "3.14"
 pythonPlatform = "All"
 typeCheckingMode = "strict"

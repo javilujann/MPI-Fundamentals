@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+import sys
+from heapq import heappush, heapreplace
 from pathlib import Path
 
 from mpi4py import MPI
@@ -7,41 +9,90 @@ from mpi4py import MPI
 # Colours of the bar chart
 BAR, MUTED, GRID = "#2a78d6", "#52514e", "#dcdbd6"
 
+# Proteins the lab asks to rank, to print and to draw.
+TOP_N = 10
+
+# Fields of every CSV row: protid, enzyme, hydrofob, sequence.
+FIELDS = 4
+
 type Match = tuple[int, int, int]
 # Comparing two of these tuples already implements the ranking the lab asks for:
 # more occurrences first, ties broken by the highest hydrofob.
 
 
 def scan(path: Path, pattern: bytes, start: int, end: int) -> tuple[int, int, list[Match]]:
+    """Count the occurrences of ``pattern`` in the lines owned by one chunk.
+
+    A chunk owns every line whose *first* byte falls inside ``[start, end)``, so
+    splitting the file into consecutive chunks and scanning each one covers
+    every line exactly once, with no line read twice and none left out.
+
+    Occurrences are counted without overlapping, the way ``bytes.count`` does:
+    ``b"ABABA"`` holds one ``b"ABA"``, not two.
+
+    Args:
+        path: Data set to search.
+        pattern: Pattern to search, in uppercase and already encoded.
+        start: First byte of the chunk.
+        end: First byte after the chunk.
+
+    Returns:
+        The number of proteins with at least one occurrence, the total number of
+        occurrences, and the best ``TOP_N`` matches sorted from best to worst.
+    """
     proteins = 0
     occurrences = 0
+    # A min-heap of at most TOP_N matches, so best[0] is the worst candidate
+    # kept so far: exactly the one a new match has to beat. A heap instead of a
+    # sorted list turns the work done per match from a sort into a comparison.
     best: list[Match] = []
 
     with path.open("rb") as data:
-        data.seek(start)
+        if start == 0:
+            data.readline()  # Skip the CSV header
+        else:
+            # One byte back on purpose. The readline below then swallows the
+            # rest of the line that straddles `start`, which belongs to the
+            # previous chunk; and when `start` already is a line start it
+            # swallows only the newline before it, so that line is not lost.
+            data.seek(start - 1)
+            data.readline()
 
-        # Skip the CSV header (if at byte 0) or the partial line
-        # that belongs to the previous worker's chunk
-        data.readline()
-
-        # Keep reading line by line until we pass the assigned end byte
-        while data.tell() < end:
+        # First byte of the next line, kept by hand instead of asking the file
+        # for it with data.tell() once per line.
+        position = data.tell()
+        while position < end:
             line = data.readline()
             if not line:
                 break  # End of file reached
+            position += len(line)
 
-            protid, _enzyme, hydrofob, sequence = line.split(b",")
+            # maxsplit=3 stops splitting as soon as the four fields are known,
+            # and keeps a comma inside the sequence from breaking the unpacking.
+            fields = line.split(b",", 3)
+            if len(fields) != FIELDS:
+                message = f"{path}: malformed line at byte {position - len(line)}: {line!r}"
+                raise ValueError(message)
+            protid, _enzyme, hydrofob, sequence = fields
 
             count = sequence.count(pattern)
-            if count > 0:
-                proteins += 1
-                occurrences += count
+            if count == 0:
+                continue
+
+            proteins += 1
+            occurrences += count
+
+            if len(best) < TOP_N:
+                heappush(best, (count, int(hydrofob), int(protid)))
+            elif count >= best[0][0]:
+                # Only worth building the tuple here: a protein with fewer
+                # occurrences than the worst candidate cannot enter the ranking,
+                # and most of them have fewer.
                 match = (count, int(hydrofob), int(protid))
+                if match > best[0]:
+                    heapreplace(best, match)
 
-                best.append(match)
-                best.sort(reverse=True)  # Sorts descending so the highest counts are first
-                best = best[:10]  # Keep only the first 10 elements
-
+    best.sort(reverse=True)  # Sorts descending so the highest counts are first
     return proteins, occurrences, best
 
 
@@ -110,15 +161,28 @@ def main() -> None:
     path = Path("proteins.csv")  # Path to the file
 
     # 1 and 2: only the first process reads the pattern from the keyboard and
-    # changes it to uppercase, and then broadcasts it to all the others.
-    pattern: str | None = None
+    # changes it to uppercase, and then broadcasts it to all the others. What
+    # travels is the pattern together with the reason to stop, if there is one:
+    # every process has to learn about the failure so that all of them leave at
+    # the same point, because a process aborting on its own would leave the rest
+    # blocked forever inside the next collective call.
+    pattern: str = ""
+    error: str | None = None
     if rank == 0:
-        pattern = input("Pattern to search: ").strip().upper()
+        try:
+            pattern = input("Pattern to search: ").strip().upper()
+        except EOFError:
+            pattern = ""  # Closed stdin: handled below, like an empty answer
+        if not pattern:
+            error = "the pattern cannot be empty"
+        elif not path.is_file():
+            error = f"{path} not found; create it with proteins-generator.py"
 
-    pattern = comm.bcast(pattern, root=0)
-    if pattern is None:
-        message = "the pattern cannot be empty"
-        raise SystemExit(message)
+    pattern, error = comm.bcast((pattern, error), root=0)
+    if error is not None:
+        if rank == 0:
+            print(error, file=sys.stderr)
+        raise SystemExit(1)
 
     # 3: the barrier makes every process start measuring at the same instant.
     comm.Barrier()
@@ -136,24 +200,25 @@ def main() -> None:
     # The two counters are reduced with a sum, and every process sends its own
     # TOP_N candidates: a protein in the global top TOP_N is necessarily in the
     # top TOP_N of the process that found it, so the union holds all of them.
-    total_proteins = comm.reduce(proteins, op=MPI.SUM, root=0)
-    total_occurrences = comm.reduce(occurrences, op=MPI.SUM, root=0)
+    total_proteins: int | None = comm.reduce(proteins, op=MPI.SUM, root=0)
+    total_occurrences: int | None = comm.reduce(occurrences, op=MPI.SUM, root=0)
     candidates: list[list[Match]] | None = comm.gather(best, root=0)
 
-    # 11 and 12: the root process stops the clock and prints the results.
-    if rank != 0 or candidates is None:
+    # 11 and 12: the root process stops the clock and prints the results. It is
+    # also the only one that gets a value out of the three calls above.
+    if rank != 0 or candidates is None or total_proteins is None or total_occurrences is None:
         return
 
     flatten_best: list[Match] = []
     for best_list in candidates:
         flatten_best.extend(best_list)
     flatten_best.sort(reverse=True)
-    best = flatten_best[:10]
+    best = flatten_best[:TOP_N]
 
     elapsed = MPI.Wtime() - start
     print(f"Execution time with {nprocs} processes: {elapsed:.3f} s")
 
-    report(pattern, total_proteins or 0, total_occurrences or 0, best)
+    report(pattern, total_proteins, total_occurrences, best)
     plot(pattern, best)
 
 

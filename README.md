@@ -17,17 +17,15 @@ that are delivered have to be stand-alone scripts.
 ├── proteins-generator.py   # given by the teaching staff, delivered untouched
 ├── serial-proteins.py      # delivered — part one
 ├── mpi-proteins.py         # delivered — part two
-├── benchmark.py            # helper: measures both versions and draws the charts
 ├── authors.txt             # delivered
-├── report.typ              # source of report.pdf, which is delivered
-├── results/                # benchmark.csv and the charts of the report
 └── pyproject.toml          # Ruff and Pyright configuration
 ```
 
 `serial-proteins.py` and `mpi-proteins.py` repeat the `scan`, `report` and
 `plot` functions instead of importing them from a common module. That is
 deliberate: the delivery accepts only these two scripts, so each one has to run
-on its own.
+on its own. The two copies of `scan` are kept byte-identical, so a fix to one is
+a fix to the other.
 
 ## Getting started
 
@@ -54,47 +52,33 @@ The generator always writes `proteins.csv`. Rename the small one out of the way
 
 ## Running the programs
 
+Both programs take no arguments: they ask for the pattern on the keyboard and
+read `proteins.csv` from the current directory.
+
 ```bash
-python serial-proteins.py                        # asks for the pattern
-mpiexec -n 12 python mpi-proteins.py             # same, in parallel
-mpiexec -n 12 python mpi-proteins.py -s 1.268    # ...and print the speedup
+python serial-proteins.py                 # asks for the pattern
+mpiexec -n 12 python mpi-proteins.py      # same, in parallel
 ```
 
-Both accept the same optional arguments, which exist to script the measurements
-and are not needed for normal use:
-
-| Argument            | Meaning                                              |
-| ------------------- | ---------------------------------------------------- |
-| `-f`, `--file`      | data set to search (default `proteins.csv`)          |
-| `-p`, `--pattern`   | pattern to search, instead of asking for it          |
-| `--save FILE`       | write the bar chart to `FILE` instead of showing it  |
-| `--no-plot`         | skip the bar chart                                   |
-| `-s`, `--serial-time` | serial time, to print the speedup (MPI version only) |
-
-Pass more processes than cores only with `mpiexec --oversubscribe`.
+Each one prints its own execution time, the ranking of the ten best proteins and
+the protein with most occurrences, and then draws the bar chart. Pass more
+processes than cores only with `mpiexec --oversubscribe`.
 
 ## Measuring
 
-```bash
-python benchmark.py -r 3
-```
+The measurements of the report are taken by hand: run the serial version once,
+run the parallel one for each process count and each machine under test, and
+compute the speedup from the times both of them print.
 
-Runs both versions for several patterns and process counts and writes
-`results/benchmark.csv` plus the three charts used in the report.
+## The report
 
-## Building the report
-
-```bash
-typst compile report.typ report.pdf
-```
-
-The report reads the author names from `authors.txt` and every timing in it from
-`results/benchmark.csv`, so neither is written down twice.
+`report.pdf` is written by hand and delivered together with the two scripts. It
+holds the timings, the speedup of requirement 12 and the charts comparing both
+versions.
 
 ## Packaging the delivery
 
-Fill in `authors.txt` first, rebuild the report, and then, with the NIA of the
-group:
+Fill in `authors.txt` first, and then, with the NIA of the group:
 
 ```bash
 zip 100052132_lab2_2026.zip report.pdf authors.txt serial-proteins.py mpi-proteins.py
