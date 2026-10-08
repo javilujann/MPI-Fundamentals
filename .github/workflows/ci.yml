@@ -55,6 +55,6 @@ jobs:
         # instead of in the interpreter set up by setup-python.
         run: |
           python -m venv .venv
-          .venv/bin/python -m pip install --group lab --group dev
+          .venv/bin/python -m pip install --group dev
       - name: Pyright
         run: .venv/bin/pyright
