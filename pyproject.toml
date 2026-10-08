@@ -8,15 +8,17 @@
 # listed here so that `python -m pip install --group lab --group dev` sets up a
 # working environment from scratch.
 [dependency-groups]
-lab = [
-    "matplotlib>=3.10",
-    "mpi4py>=4.0",
-    "numpy>=2.0",
-]
 dev = [
+    { include-group = "run" },
     "pre-commit>=4.6",
     "pyright>=1.1.414",
     "ruff>=0.16.7",
+]
+
+run = [
+    "matplotlib>=3.10",
+    "mpi4py>=4.0",
+    "numpy>=2.0",
 ]
 
 # --------------------------------------------------------------------------- #

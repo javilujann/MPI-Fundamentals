@@ -32,7 +32,7 @@ a fix to the other.
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-python -m pip install --group lab --group dev
+python -m pip install --group dev
 pre-commit install          # needs a git repository; run `git init` first if there is none
 ```
 
@@ -69,20 +69,6 @@ processes than cores only with `mpiexec --oversubscribe`.
 The measurements of the report are taken by hand: run the serial version once,
 run the parallel one for each process count and each machine under test, and
 compute the speedup from the times both of them print.
-
-## The report
-
-`report.pdf` is written by hand and delivered together with the two scripts. It
-holds the timings, the speedup of requirement 12 and the charts comparing both
-versions.
-
-## Packaging the delivery
-
-Fill in `authors.txt` first, and then, with the NIA of the group:
-
-```bash
-zip 100052132_lab2_2026.zip report.pdf authors.txt serial-proteins.py mpi-proteins.py
-```
 
 ## Everyday commands
 
